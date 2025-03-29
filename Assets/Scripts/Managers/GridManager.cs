@@ -1,15 +1,15 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using DG.Tweening; // DOTween kütüphanesi
+using DG.Tweening;
 
 public class GridManager : MonoBehaviour
 {
     public static GridManager instance;
     public int width = 8;
     public int height = 8;
-    public GameObject[] blockPrefabs; // Farklı blok türlerini buraya ekleyebilirsin.
-    private Tile[,] grid; // Blokları saklamak için 2D dizi
+    public GameObject[] blockPrefabs;
+    private Tile[,] grid;
 
     private void Awake()
     {
@@ -53,18 +53,31 @@ public class GridManager : MonoBehaviour
         FindMatches(x, y, grid[x, y].type, matchedBlocks);
         List<int> effectedColumns = new();
 
-        if (matchedBlocks.Count >= 2)
-        {
-            foreach (var pos in matchedBlocks)
-            {
-                Destroy(grid[pos.x, pos.y].gameObject);
-                grid[pos.x, pos.y] = null;
-                if (!effectedColumns.Contains(pos.x))
-                {
-                    effectedColumns.Add(pos.x);
-                }
-            }
+        if (matchedBlocks.Count < 2) return;
+        //TODO: Lower move count
 
+        if (matchedBlocks.Count >= 4)
+        {
+            int rand = Random.Range(0, 2);
+            if (rand == 1)
+            {
+                grid[x, y].SetType(TileType.rocketV);
+            }
+            else
+            {
+                grid[x, y].SetType(TileType.rocketH);
+            }
+            matchedBlocks.Remove(new Vector2Int(x, y));
+        }
+
+        foreach (var pos in matchedBlocks)
+        {
+            Destroy(grid[pos.x, pos.y].gameObject);
+            grid[pos.x, pos.y] = null;
+            if (!effectedColumns.Contains(pos.x))
+            {
+                effectedColumns.Add(pos.x);
+            }
         }
 
         DropBlocks(effectedColumns);
@@ -82,6 +95,33 @@ public class GridManager : MonoBehaviour
         FindMatches(x - 1, y, type, matchedBlocks);
         FindMatches(x, y + 1, type, matchedBlocks);
         FindMatches(x, y - 1, type, matchedBlocks);
+    }
+
+    public void Rocket(int x, int y, TileType type)
+    {
+        //TODO: Başka bir rocket varsa farklı sonuç ekle
+        if (type == TileType.rocketV)
+        {
+            for (int i = 0; i < height; i++)
+            {
+                Destroy(grid[x, i].gameObject);
+                grid[x, i] = null;
+            }
+            DropBlocks(new List<int>() { x });
+        }
+        else if (type == TileType.rocketH)
+        {
+            List<int> effectedColumns = new();
+            for (int i = 0; i < width; i++)
+            {
+                Destroy(grid[i, y].gameObject);
+                grid[i, y] = null;
+                effectedColumns.Add(i);
+            }
+
+            DropBlocks(effectedColumns);
+        }
+
     }
 
     private void DropBlocks(List<int> effectedColumns)

@@ -12,7 +12,16 @@ public class Tile : MonoBehaviour, IPointerClickHandler
     }
     public void OnPointerClick(PointerEventData eventData)
     {
-        GridManager.instance.CheckMatches((int)transform.position.x, (int)transform.position.y);
+        switch (type)
+        {
+            case TileType.rocketV:
+            case TileType.rocketH:
+                GridManager.instance.Rocket((int)transform.position.x, (int)transform.position.y, type);
+                break;
+            default:
+                GridManager.instance.CheckMatches((int)transform.position.x, (int)transform.position.y);
+                break;
+        }
     }
 }
 

@@ -5,5 +5,7 @@ public enum TileType
     red,
     blue,
     yellow,
-    green
+    green,
+    rocketV, // vertical rocket
+    rocketH, // horizontal rocket
 }

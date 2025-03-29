@@ -15,6 +15,13 @@ public class TileManager : MonoBehaviour
 
     public Sprite GetTileSprite(TileType type)
     {
+        int index = (int)type;
+        if (index >= tileSprites.Count)
+        {
+            Debug.LogError("TileManager: Tile sprite not found for type: " + type);
+            return null;
+        }
+
         return tileSprites[(int)type];
     }
 }
