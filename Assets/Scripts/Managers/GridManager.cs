@@ -9,7 +9,9 @@ public class GridManager : MonoBehaviour
     public int width = 8;
     public int height = 8;
     public GameObject[] blockPrefabs;
+    public GameObject rocketPrefab; // Roket prefabı
     private Tile[,] grid;
+    private float rocketTime = 0.4f;
 
     private void Awake()
     {
@@ -17,7 +19,7 @@ public class GridManager : MonoBehaviour
     }
     void Start()
     {
-        grid = new Tile[width, height];
+        grid = new Tile[width, height * 2];
         InitializeGrid();
     }
 
@@ -81,7 +83,6 @@ public class GridManager : MonoBehaviour
         }
 
         DropBlocks(effectedColumns);
-
     }
 
     private void FindMatches(int x, int y, TileType type, List<Vector2Int> matchedBlocks)
@@ -99,58 +100,137 @@ public class GridManager : MonoBehaviour
 
     public void Rocket(int x, int y, TileType type)
     {
-        //TODO: Başka bir rocket varsa farklı sonuç ekle
+        if (type == TileType.rocketV || type == TileType.rocketH)
+        {
+            StartCoroutine(LaunchRocket(x, y, type));
+        }
+        else
+        {
+            Debug.LogError("GridManager: Invalid rocket type");
+        }
+    }
+
+    private IEnumerator LaunchRocket(int x, int y, TileType type)
+    {
+        Vector2 dir1 = Vector2.zero;
+        Vector2 dir2 = Vector2.zero;
         if (type == TileType.rocketV)
         {
-            for (int i = 0; i < height; i++)
-            {
-                Destroy(grid[x, i].gameObject);
-                grid[x, i] = null;
-            }
-            DropBlocks(new List<int>() { x });
+            dir1 = Vector2.up;
+            dir2 = Vector2.down;
         }
         else if (type == TileType.rocketH)
         {
-            List<int> effectedColumns = new();
-            for (int i = 0; i < width; i++)
-            {
-                Destroy(grid[i, y].gameObject);
-                grid[i, y] = null;
-                effectedColumns.Add(i);
-            }
-
-            DropBlocks(effectedColumns);
+            dir1 = Vector2.right;
+            dir2 = Vector2.left;
+        }
+        else
+        {
+            yield break;
         }
 
+        GameObject rocket1 = Instantiate(rocketPrefab, grid[x, y].transform.position, Quaternion.identity);
+        GameObject rocket2 = Instantiate(rocketPrefab, grid[x, y].transform.position, Quaternion.identity);
+
+        rocket1.transform.parent = transform;
+        rocket2.transform.parent = transform;
+
+        rocket1.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetRocketSprite(type, 0);
+        rocket2.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetRocketSprite(type, 1);
+
+        Vector2 target1 = new Vector2(x, y) + dir1 * height;
+        Vector2 target2 = new Vector2(x, y) + dir2 * height;
+
+        Sequence seq1 = DOTween.Sequence();
+        Sequence seq2 = DOTween.Sequence();
+
+        seq1.Append(rocket1.transform.DOMove(target1, rocketTime).SetEase(Ease.Linear));
+        seq2.Append(rocket2.transform.DOMove(target2, rocketTime).SetEase(Ease.Linear));
+
+        seq1.OnUpdate(() =>
+        {
+            Vector2 pos = rocket1.transform.position;
+            int gridX = Mathf.RoundToInt(pos.x);
+            int gridY = Mathf.RoundToInt(pos.y);
+            if (gridX >= 0 && gridX < width && gridY >= 0 && gridY < height && grid[gridX, gridY] != null)
+            {
+                Destroy(grid[gridX, gridY].gameObject);
+                grid[gridX, gridY] = null;
+            }
+        });
+
+        seq2.OnUpdate(() =>
+        {
+            Vector2 pos = rocket2.transform.position;
+            int gridX = Mathf.RoundToInt(pos.x);
+            int gridY = Mathf.RoundToInt(pos.y);
+            if (gridX >= 0 && gridX < width && gridY >= 0 && gridY < height && grid[gridX, gridY] != null)
+            {
+                Destroy(grid[gridX, gridY].gameObject);
+                grid[gridX, gridY] = null;
+            }
+        });
+
+        yield return seq1.WaitForCompletion();
+        if (seq2.active)
+            yield return seq2.WaitForCompletion();
+
+        Destroy(rocket1);
+        Destroy(rocket2);
+
+        List<int> effectedColumns = new();
+        if (dir1 == Vector2.up || dir1 == Vector2.down)
+        {
+            effectedColumns.Add(x);
+        }
+        else if (dir1 == Vector2.left || dir1 == Vector2.right)
+        {
+            for (int i = 0; i < width; i++)
+            {
+                effectedColumns.Add(i);
+            }
+        }
+
+        DropBlocks(effectedColumns);
     }
 
     private void DropBlocks(List<int> effectedColumns)
     {
         foreach (int x in effectedColumns)
         {
+            int emptyCount = 0;
             for (int y = 0; y < height; y++)
             {
                 if (grid[x, y] == null)
                 {
-                    for (int k = y + 1; k < height; k++)
+                    emptyCount++;
+                }
+            }
+
+            for (int i = 0; i < emptyCount; i++)
+            {
+                int randomIndex = Random.Range(0, blockPrefabs.Length);
+                GameObject block = Instantiate(blockPrefabs[randomIndex], new Vector2(x, height + i + 1), Quaternion.identity);
+                block.transform.parent = transform;
+                grid[x, height + i] = block.GetComponent<Tile>();
+                int randomType = Random.Range(0, 4); //TODO: Bu değerler enumdan alınabilir.
+                grid[x, height + i].SetType((TileType)randomType);
+            }
+
+            for (int y = 0; y < height; y++)
+            {
+                if (grid[x, y] == null)
+                {
+                    for (int k = y + 1; k < height + emptyCount; k++)
                     {
                         if (grid[x, k] != null)
                         {
                             grid[x, y] = grid[x, k];
                             grid[x, k] = null;
-                            grid[x, y].transform.DOMove(new Vector2(x, y), 0.3f).SetEase(Ease.OutBounce);
+                            grid[x, y].transform.DOMove(new Vector2(x, y), 0.3f);
                             break;
                         }
                     }
-                }
-            }
-
-            // Yeni bloklar oluştur
-            for (int y = height - 1; y >= 0; y--)
-            {
-                if (grid[x, y] == null)
-                {
-                    SpawnBlock(x, y);
                 }
             }
         }
