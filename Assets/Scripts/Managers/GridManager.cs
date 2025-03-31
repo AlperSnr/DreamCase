@@ -11,28 +11,32 @@ public class GridManager : MonoBehaviour
     private int width;
     private int height;
     public GameObject tilePrefab;
-    public GameObject rocketPrefab; // Roket prefabı
+    public GameObject rocketPrefab;
     private Tile[,] grid;
     private float rocketTime = 0.6f;
-    private Level curLevel;
 
     private void Awake()
     {
         instance = this;
     }
-    void Start()
+    public void InitializeGrid(Level curLevel)
     {
-        Level curLevel = JsonUtility.FromJson<Level>(Resources.Load<TextAsset>("Levels/level_01").text);
         width = curLevel.grid_width;
         height = curLevel.grid_height;
         grid = new Tile[width, height * 2];
-        InitializeGrid();
+        PoolingManager.instance.CreatePool(Tile.poolingTag, tilePrefab, width * height);
+        CreateGrid(curLevel);
+        FindAllLargeGroups();
     }
 
-    void InitializeGrid()
+    void CreateGrid(Level curLevel)
     {
-        PoolingManager.instance.CreatePool(Tile.poolingTag, tilePrefab, width * height);
-        Level curLevel = JsonUtility.FromJson<Level>(Resources.Load<TextAsset>("Levels/level_01").text);
+        Dictionary<TileType, int> goals = new()
+        {
+            { TileType.box, 0 },
+            { TileType.vase, 0 },
+            { TileType.stone, 0 },
+        };
         int counter = 0;
         foreach (string s in curLevel.grid)
         {
@@ -60,18 +64,23 @@ public class GridManager : MonoBehaviour
                     break;
                 case "bo":
                     type = TileType.box;
+                    goals[TileType.box]++;
                     break;
                 case "s":
                     type = TileType.stone;
+                    goals[TileType.stone]++;
                     break;
                 case "v1":
                     type = TileType.vase;
+                    goals[TileType.vase]++;
                     break;
 
             }
             SpawnTile(counter % curLevel.grid_width, counter / curLevel.grid_width, type);
             counter++;
         }
+
+        LevelManager.instance.SetGoals(goals);
     }
 
     void SpawnTile(int x, int y, TileType type)
@@ -104,9 +113,9 @@ public class GridManager : MonoBehaviour
         FindMatches(x, y, grid[x, y].type, matchedBlocks, obstacles);
 
         if (matchedBlocks.Count < 2) return;
+        LevelManager.instance.DecreaseMoves();
 
         List<int> effectedColumns = new();
-        //TODO: Lower move count
 
         if (matchedBlocks.Count >= 4)
         {
@@ -135,6 +144,8 @@ public class GridManager : MonoBehaviour
         {
             if (grid[pos.x, pos.y].Damage())
             {
+                
+
                 DestroyTile(pos.x, pos.y);
                 if (!effectedColumns.Contains(pos.x))
                 {
@@ -149,13 +160,17 @@ public class GridManager : MonoBehaviour
     private void DestroyTile(int x, int y)
     {
         if (grid[x, y] == null) return;
+
+        if (grid[x, y].isObstacle)
+            LevelManager.instance.UpdateGoal(grid[x, y].type, -1);
+
         PoolingManager.instance.ReturnToPool(Tile.poolingTag, grid[x, y].gameObject);
         grid[x, y] = null;
     }
 
     private void FindMatches(int x, int y, TileType type, List<Vector2Int> matchedBlocks, List<Vector2Int> obstacles)
     {
-        if (x < 0 || x >= width || y < 0 || y >= height) return;
+        if (!IsValidCoordinate(x, y)) return;
         if (grid[x, y] == null) return;
 
         if (grid[x, y].isObstacle && !obstacles.Contains(new Vector2Int(x, y)))
@@ -171,6 +186,42 @@ public class GridManager : MonoBehaviour
         FindMatches(x - 1, y, type, matchedBlocks, obstacles);
         FindMatches(x, y + 1, type, matchedBlocks, obstacles);
         FindMatches(x, y - 1, type, matchedBlocks, obstacles);
+    }
+
+    private void FindAllLargeGroups()
+    {
+        bool[,] visited = new bool[width, height];
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (grid[x, y] != null && !visited[x, y])
+                {
+                    List<Vector2Int> matchedBlocks = new List<Vector2Int>();
+                    List<Vector2Int> obstacles = new List<Vector2Int>();
+                    FindMatches(x, y, grid[x, y].type, matchedBlocks, obstacles);
+
+                    ToggleHintOfGroup(matchedBlocks, matchedBlocks.Count >= 4);
+
+                    foreach (var pos in matchedBlocks)
+                    {
+                        visited[pos.x, pos.y] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    private void ToggleHintOfGroup(List<Vector2Int> group, bool isHint)
+    {
+        foreach (var pos in group)
+        {
+            if (grid[pos.x, pos.y] != null)
+            {
+                grid[pos.x, pos.y].SetRocketHint(isHint);
+            }
+        }
     }
 
     public void Rocket(int x, int y, TileType type)
@@ -323,17 +374,7 @@ public class GridManager : MonoBehaviour
         }
     }
 
-    private void DropTiles()
-    {
-        List<int> effectedColumns = new();
 
-        for (int i = 0; i < width; i++)
-        {
-            effectedColumns.Add(i);
-        }
-        DropTiles(effectedColumns);
-
-    }
 
     private void DropTiles(List<int> effectedColumns)
     {
@@ -346,6 +387,11 @@ public class GridManager : MonoBehaviour
                 {
                     emptyCount++;
                 }
+            }
+
+            if(emptyCount == 0)
+            {
+                continue;
             }
 
             for (int i = 0; i < emptyCount; i++)
@@ -372,5 +418,6 @@ public class GridManager : MonoBehaviour
                 }
             }
         }
+        FindAllLargeGroups();
     }
 }
