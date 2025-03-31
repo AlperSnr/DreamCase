@@ -2,16 +2,18 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
+using static UnityEditor.PlayerSettings;
 
 public class GridManager : MonoBehaviour
 {
     public static GridManager instance;
-    public int width = 8;
-    public int height = 8;
-    public GameObject[] blockPrefabs;
+    private int width;
+    private int height;
+    public GameObject tilePrefab;
     public GameObject rocketPrefab; // Roket prefabı
     private Tile[,] grid;
     private float rocketTime = 0.4f;
+    private Level curLevel;
 
     private void Awake()
     {
@@ -19,31 +21,75 @@ public class GridManager : MonoBehaviour
     }
     void Start()
     {
+        Level curLevel = JsonUtility.FromJson<Level>(Resources.Load<TextAsset>("Levels/level_01").text);
+        width = curLevel.grid_width;
+        height = curLevel.grid_height;
         grid = new Tile[width, height * 2];
         InitializeGrid();
     }
 
     void InitializeGrid()
     {
-        for (int x = 0; x < width; x++)
+        PoolingManager.instance.CreatePool(Tile.poolingTag, tilePrefab, width * height);
+        Level curLevel = JsonUtility.FromJson<Level>(Resources.Load<TextAsset>("Levels/level_01").text);
+        int counter = 0;
+        foreach (string s in curLevel.grid)
         {
-            for (int y = 0; y < height; y++)
+
+            TileType type = TileType.rand;
+            switch (s)
             {
-                SpawnBlock(x, y);
+                case "r":
+                    type = TileType.red;
+                    break;
+                case "g":
+                    type = TileType.green;
+                    break;
+                case "b":
+                    type = TileType.blue;
+                    break;
+                case "y":
+                    type = TileType.yellow;
+                    break;
+                case "vro":
+                    type = TileType.rocketV;
+                    break;
+                case "hro":
+                    type = TileType.rocketH;
+                    break;
+                case "bo":
+                    type = TileType.box;
+                    break;
+                case "s":
+                    type = TileType.stone;
+                    break;
+                case "v1":
+                    type = TileType.vase;
+                    break;
+
             }
+            SpawnTile(counter % curLevel.grid_width, counter / curLevel.grid_width, type);
+            counter++;
         }
     }
 
-    void SpawnBlock(int x, int y)
+    void SpawnTile(int x, int y, TileType type)
     {
-        if (blockPrefabs.Length == 0) return;
-
-        int randomIndex = Random.Range(0, blockPrefabs.Length);
-        GameObject block = Instantiate(blockPrefabs[randomIndex], new Vector2(x, height + 1), Quaternion.identity);
+        GameObject block = PoolingManager.instance.GetFromPool(Tile.poolingTag, new Vector2(x, height + 1), Quaternion.identity);
         block.transform.parent = transform;
         grid[x, y] = block.GetComponent<Tile>();
-        int randomType = Random.Range(0, 4); //TODO: Bu değerler enumdan alınabilir.
-        grid[x, y].SetType((TileType)randomType);
+
+        switch (type)
+        {
+            case TileType.rand:
+                int randomType = Random.Range(0, 4);
+                grid[x, y].SetType((TileType)randomType);
+                break;
+            default:
+                grid[x, y].SetType(type);
+                break;
+        }
+
         block.transform.DOMove(new Vector2(x, y), 0.3f).SetEase(Ease.OutBounce);
     }
 
@@ -51,11 +97,13 @@ public class GridManager : MonoBehaviour
     {
         if (grid[x, y] == null) return;
         List<Vector2Int> matchedBlocks = new();
+        List<Vector2Int> obstacles = new();
 
-        FindMatches(x, y, grid[x, y].type, matchedBlocks);
-        List<int> effectedColumns = new();
+        FindMatches(x, y, grid[x, y].type, matchedBlocks, obstacles);
 
         if (matchedBlocks.Count < 2) return;
+
+        List<int> effectedColumns = new();
         //TODO: Lower move count
 
         if (matchedBlocks.Count >= 4)
@@ -74,28 +122,52 @@ public class GridManager : MonoBehaviour
 
         foreach (var pos in matchedBlocks)
         {
-            Destroy(grid[pos.x, pos.y].gameObject);
-            grid[pos.x, pos.y] = null;
+            DestroyTile(pos);
             if (!effectedColumns.Contains(pos.x))
             {
                 effectedColumns.Add(pos.x);
             }
         }
 
+        foreach (var pos in obstacles)
+        {
+            if (grid[pos.x, pos.y].Damage())
+            {
+                DestroyTile(pos);
+                if (!effectedColumns.Contains(pos.x))
+                {
+                    effectedColumns.Add(pos.x);
+                }
+            }
+        }
+
         DropBlocks(effectedColumns);
     }
 
-    private void FindMatches(int x, int y, TileType type, List<Vector2Int> matchedBlocks)
+    private void DestroyTile(Vector2Int pos)
+    {
+        PoolingManager.instance.ReturnToPool(Tile.poolingTag, grid[pos.x, pos.y].gameObject);
+        grid[pos.x, pos.y] = null;
+    }
+
+    private void FindMatches(int x, int y, TileType type, List<Vector2Int> matchedBlocks, List<Vector2Int> obstacles)
     {
         if (x < 0 || x >= width || y < 0 || y >= height) return;
         if (grid[x, y] == null) return;
+
+        if (grid[x, y].isObstacle && !obstacles.Contains(new Vector2Int(x, y)))
+        {
+            obstacles.Add(new Vector2Int(x, y));
+            return;
+        }
+
         if (grid[x, y].type != type) return;
         if (matchedBlocks.Contains(new Vector2Int(x, y))) return;
         matchedBlocks.Add(new Vector2Int(x, y));
-        FindMatches(x + 1, y, type, matchedBlocks);
-        FindMatches(x - 1, y, type, matchedBlocks);
-        FindMatches(x, y + 1, type, matchedBlocks);
-        FindMatches(x, y - 1, type, matchedBlocks);
+        FindMatches(x + 1, y, type, matchedBlocks, obstacles);
+        FindMatches(x - 1, y, type, matchedBlocks, obstacles);
+        FindMatches(x, y + 1, type, matchedBlocks, obstacles);
+        FindMatches(x, y - 1, type, matchedBlocks, obstacles);
     }
 
     public void Rocket(int x, int y, TileType type)
@@ -132,11 +204,14 @@ public class GridManager : MonoBehaviour
         GameObject rocket1 = Instantiate(rocketPrefab, grid[x, y].transform.position, Quaternion.identity);
         GameObject rocket2 = Instantiate(rocketPrefab, grid[x, y].transform.position, Quaternion.identity);
 
+        //Destroy(grid[x, y].gameObject);
+        DestroyTile(new Vector2Int(x, y));
+
         rocket1.transform.parent = transform;
         rocket2.transform.parent = transform;
 
-        rocket1.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetRocketSprite(type, 0);
-        rocket2.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetRocketSprite(type, 1);
+        rocket1.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetTileSprite(type, 1);
+        rocket2.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetTileSprite(type, 2);
 
         Vector2 target1 = new Vector2(x, y) + dir1 * height;
         Vector2 target2 = new Vector2(x, y) + dir2 * height;
@@ -149,26 +224,12 @@ public class GridManager : MonoBehaviour
 
         seq1.OnUpdate(() =>
         {
-            Vector2 pos = rocket1.transform.position;
-            int gridX = Mathf.RoundToInt(pos.x);
-            int gridY = Mathf.RoundToInt(pos.y);
-            if (gridX >= 0 && gridX < width && gridY >= 0 && gridY < height && grid[gridX, gridY] != null)
-            {
-                Destroy(grid[gridX, gridY].gameObject);
-                grid[gridX, gridY] = null;
-            }
+            RocketOnUpdate(rocket1);
         });
 
         seq2.OnUpdate(() =>
         {
-            Vector2 pos = rocket2.transform.position;
-            int gridX = Mathf.RoundToInt(pos.x);
-            int gridY = Mathf.RoundToInt(pos.y);
-            if (gridX >= 0 && gridX < width && gridY >= 0 && gridY < height && grid[gridX, gridY] != null)
-            {
-                Destroy(grid[gridX, gridY].gameObject);
-                grid[gridX, gridY] = null;
-            }
+            RocketOnUpdate(rocket2);
         });
 
         yield return seq1.WaitForCompletion();
@@ -194,6 +255,24 @@ public class GridManager : MonoBehaviour
         DropBlocks(effectedColumns);
     }
 
+    private void RocketOnUpdate(GameObject rocketInstance)
+    {
+        Vector2 pos = rocketInstance.transform.position;
+        int gridX = Mathf.RoundToInt(pos.x);
+        int gridY = Mathf.RoundToInt(pos.y);
+        if (gridX >= 0 && gridX < width && gridY >= 0 && gridY < height && grid[gridX, gridY] != null)
+        {
+            if (grid[gridX, gridY].type == TileType.rocketV || grid[gridX, gridY].type == TileType.rocketH)
+            {
+                Rocket(gridX, gridY, grid[gridX, gridY].type);
+            }
+            else
+            {
+                DestroyTile(new Vector2Int(gridX, gridY));
+            }
+        }
+    }
+
     private void DropBlocks(List<int> effectedColumns)
     {
         foreach (int x in effectedColumns)
@@ -209,12 +288,12 @@ public class GridManager : MonoBehaviour
 
             for (int i = 0; i < emptyCount; i++)
             {
-                int randomIndex = Random.Range(0, blockPrefabs.Length);
-                GameObject block = Instantiate(blockPrefabs[randomIndex], new Vector2(x, height + i + 1), Quaternion.identity);
-                block.transform.parent = transform;
-                grid[x, height + i] = block.GetComponent<Tile>();
-                int randomType = Random.Range(0, 4); //TODO: Bu değerler enumdan alınabilir.
-                grid[x, height + i].SetType((TileType)randomType);
+                //GameObject block = PoolingManager.instance.GetFromPool(Tile.poolingTag, new Vector2(x, height + i + 1), Quaternion.identity);
+                //block.transform.parent = transform;
+                //grid[x, height + i] = block.GetComponent<Tile>();
+                //int randomType = Random.Range(0, 4); //TODO: Bu değerler enumdan alınabilir.
+                //grid[x, height + i].SetType((TileType)randomType);
+                SpawnTile(x, height + i, TileType.rand);
             }
 
             for (int y = 0; y < height; y++)
@@ -225,6 +304,8 @@ public class GridManager : MonoBehaviour
                     {
                         if (grid[x, k] != null)
                         {
+                            if (grid[x, k].type == TileType.stone)
+                                break;
                             grid[x, y] = grid[x, k];
                             grid[x, k] = null;
                             grid[x, y].transform.DOMove(new Vector2(x, y), 0.3f);

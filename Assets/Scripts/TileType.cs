@@ -1,4 +1,3 @@
-using UnityEngine;
 
 public enum TileType
 {
@@ -6,6 +5,10 @@ public enum TileType
     blue,
     yellow,
     green,
+    box,
+    stone,
+    vase,
     rocketV, // vertical rocket
     rocketH, // horizontal rocket
+    rand,
 }

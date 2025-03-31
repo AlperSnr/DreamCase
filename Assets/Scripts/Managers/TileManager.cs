@@ -4,47 +4,68 @@ using UnityEngine;
 
 public class TileManager : MonoBehaviour
 {
-    [SerializeField] private List<Sprite> tileSprites;
-    [Header("Vertical Rocket Sprites")]
-    [SerializeField] private Sprite[] rocketV = new Sprite[2];
-    [Header("Horizontal Rocket Sprites")]
-    [SerializeField] private Sprite[] rocketH = new Sprite[2];
+    [SerializeField] private List<TileData> tileDataList;
 
     public static TileManager instance;
 
+    private Dictionary<TileType, TileData> tileDataDictionary;
+
     private void Awake()
     {
-        instance = this;
+        if (instance == null)
+        {
+            instance = this;
+            InitializeDictionary();
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
-    public Sprite GetTileSprite(TileType type)
+    private void InitializeDictionary()
     {
-        int index = (int)type;
-        if (index >= tileSprites.Count)
+        tileDataDictionary = new Dictionary<TileType, TileData>();
+
+        foreach (var tileData in tileDataList)
+        {
+            if (!tileDataDictionary.ContainsKey(tileData.type))
+            {
+                tileDataDictionary[tileData.type] = tileData;
+            }
+        }
+    }
+
+    public Sprite GetTileSprite(TileType type,int index)
+    {
+        if (tileDataDictionary.TryGetValue(type, out TileData tileData))
+        {
+            if(index < tileData.sprite.Length)
+            {
+                return tileData.sprite[index];
+            }
+            else
+            {
+                Debug.LogError("TileManager: Tile sprite index out of range for type: " + type);
+                return null;
+            }
+        }
+        else
         {
             Debug.LogError("TileManager: Tile sprite not found for type: " + type);
             return null;
         }
-
-        return tileSprites[(int)type];
     }
 
-    public Sprite GetRocketSprite(TileType type, int index)
+    public int GetHealth(TileType type)
     {
-        if (index >= 2) return null;
-
-        if (type == TileType.rocketV)
+        if (tileDataDictionary.TryGetValue(type, out TileData tileData))
         {
-            return rocketV[index];
-        }
-        else if (type == TileType.rocketH)
-        {
-            return rocketH[index];
+            return tileData.health;
         }
         else
         {
-            Debug.LogError("TileManager: Rocket sprite not found for type: " + type);
-            return null;
+            return 0;
         }
     }
 }
