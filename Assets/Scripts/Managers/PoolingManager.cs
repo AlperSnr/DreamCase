@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 public class PoolingManager : MonoBehaviour
 {
@@ -36,7 +37,7 @@ public class PoolingManager : MonoBehaviour
         }
     }
 
-    public GameObject GetFromPool(string tag, Vector3 position, Quaternion rotation)
+    public GameObject GetFromPool(string tag)
     {
         if (!poolDictionary.ContainsKey(tag))
         {
@@ -51,6 +52,13 @@ public class PoolingManager : MonoBehaviour
 
         GameObject obj = poolDictionary[tag].Dequeue();
         obj.SetActive(true);
+
+        return obj;
+    }
+
+    public GameObject GetFromPool(string tag, Vector3 position, Quaternion rotation)
+    {
+        GameObject obj = GetFromPool(tag);
         obj.transform.position = position;
         obj.transform.rotation = rotation;
 

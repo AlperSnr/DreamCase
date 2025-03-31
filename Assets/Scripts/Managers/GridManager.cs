@@ -7,12 +7,13 @@ using static UnityEditor.PlayerSettings;
 public class GridManager : MonoBehaviour
 {
     public static GridManager instance;
+    [SerializeField] private Transform gridParent;
     private int width;
     private int height;
     public GameObject tilePrefab;
     public GameObject rocketPrefab; // Roket prefabı
     private Tile[,] grid;
-    private float rocketTime = 0.4f;
+    private float rocketTime = 0.6f;
     private Level curLevel;
 
     private void Awake()
@@ -75,8 +76,9 @@ public class GridManager : MonoBehaviour
 
     void SpawnTile(int x, int y, TileType type)
     {
-        GameObject block = PoolingManager.instance.GetFromPool(Tile.poolingTag, new Vector2(x, height + 1), Quaternion.identity);
-        block.transform.parent = transform;
+        GameObject block = PoolingManager.instance.GetFromPool(Tile.poolingTag);
+        block.transform.parent = gridParent;
+        block.transform.localPosition = new Vector2(x, height + 1);
         grid[x, y] = block.GetComponent<Tile>();
 
         switch (type)
@@ -90,7 +92,7 @@ public class GridManager : MonoBehaviour
                 break;
         }
 
-        block.transform.DOMove(new Vector2(x, y), 0.3f).SetEase(Ease.OutBounce);
+        block.transform.DOLocalMove(new Vector2(x, y), 0.3f).SetEase(Ease.OutBounce);
     }
 
     public void CheckMatches(int x, int y)
@@ -122,7 +124,7 @@ public class GridManager : MonoBehaviour
 
         foreach (var pos in matchedBlocks)
         {
-            DestroyTile(pos);
+            DestroyTile(pos.x, pos.y);
             if (!effectedColumns.Contains(pos.x))
             {
                 effectedColumns.Add(pos.x);
@@ -133,7 +135,7 @@ public class GridManager : MonoBehaviour
         {
             if (grid[pos.x, pos.y].Damage())
             {
-                DestroyTile(pos);
+                DestroyTile(pos.x, pos.y);
                 if (!effectedColumns.Contains(pos.x))
                 {
                     effectedColumns.Add(pos.x);
@@ -141,13 +143,14 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        DropBlocks(effectedColumns);
+        DropTiles(effectedColumns);
     }
 
-    private void DestroyTile(Vector2Int pos)
+    private void DestroyTile(int x, int y)
     {
-        PoolingManager.instance.ReturnToPool(Tile.poolingTag, grid[pos.x, pos.y].gameObject);
-        grid[pos.x, pos.y] = null;
+        if (grid[x, y] == null) return;
+        PoolingManager.instance.ReturnToPool(Tile.poolingTag, grid[x, y].gameObject);
+        grid[x, y] = null;
     }
 
     private void FindMatches(int x, int y, TileType type, List<Vector2Int> matchedBlocks, List<Vector2Int> obstacles)
@@ -174,7 +177,10 @@ public class GridManager : MonoBehaviour
     {
         if (type == TileType.rocketV || type == TileType.rocketH)
         {
-            StartCoroutine(LaunchRocket(x, y, type));
+            if (!CheckAdjacentRockets(x, y))
+                StartCoroutine(LaunchRocket(x, y, type));
+            else
+                RocketCombo(x, y);
         }
         else
         {
@@ -182,8 +188,53 @@ public class GridManager : MonoBehaviour
         }
     }
 
+    private bool CheckAdjacentRockets(int x, int y)
+    {
+        if (x > 0 && grid[x - 1, y] != null && (grid[x - 1, y].type == TileType.rocketV || grid[x - 1, y].type == TileType.rocketH))
+        {
+            return true;
+        }
+        if (x < width - 1 && grid[x + 1, y] != null && (grid[x + 1, y].type == TileType.rocketV || grid[x + 1, y].type == TileType.rocketH))
+        {
+            return true;
+        }
+        if (y > 0 && grid[x, y - 1] != null && (grid[x, y - 1].type == TileType.rocketV || grid[x, y - 1].type == TileType.rocketH))
+        {
+            return true;
+        }
+        if (y < height - 1 && grid[x, y + 1] != null && (grid[x, y + 1].type == TileType.rocketV || grid[x, y + 1].type == TileType.rocketH))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private void RocketCombo(int x, int y)
+    {
+        for (int i = -1; i < 2; i++)
+        {
+            if (IsValidCoordinate(x, y + i))
+            {
+                StartCoroutine(LaunchRocket(x, y + i, TileType.rocketH));
+            }
+
+            if (IsValidCoordinate(x + i, y))
+            {
+                StartCoroutine(LaunchRocket(x + i, y, TileType.rocketV));
+            }
+        }
+
+
+    }
+
+    private bool IsValidCoordinate(int x, int y)
+    {
+        return x >= 0 && x < width && y >= 0 && y < height;
+    }
+
     private IEnumerator LaunchRocket(int x, int y, TileType type)
     {
+        yield return new WaitForEndOfFrame();
         Vector2 dir1 = Vector2.zero;
         Vector2 dir2 = Vector2.zero;
         if (type == TileType.rocketV)
@@ -201,26 +252,25 @@ public class GridManager : MonoBehaviour
             yield break;
         }
 
-        GameObject rocket1 = Instantiate(rocketPrefab, grid[x, y].transform.position, Quaternion.identity);
-        GameObject rocket2 = Instantiate(rocketPrefab, grid[x, y].transform.position, Quaternion.identity);
+        GameObject rocket1 = Instantiate(rocketPrefab, gridParent);
+        GameObject rocket2 = Instantiate(rocketPrefab, gridParent);
 
-        //Destroy(grid[x, y].gameObject);
-        DestroyTile(new Vector2Int(x, y));
+        rocket1.transform.localPosition = new Vector3(x, y);
+        rocket2.transform.localPosition = new Vector3(x, y);
 
-        rocket1.transform.parent = transform;
-        rocket2.transform.parent = transform;
+        DestroyTile(x, y);
 
         rocket1.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetTileSprite(type, 1);
         rocket2.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetTileSprite(type, 2);
 
-        Vector2 target1 = new Vector2(x, y) + dir1 * height;
-        Vector2 target2 = new Vector2(x, y) + dir2 * height;
+        Vector2 target1 = (Vector2)rocket1.transform.localPosition + dir1 * height;
+        Vector2 target2 = (Vector2)rocket2.transform.localPosition + dir2 * height;
 
         Sequence seq1 = DOTween.Sequence();
         Sequence seq2 = DOTween.Sequence();
 
-        seq1.Append(rocket1.transform.DOMove(target1, rocketTime).SetEase(Ease.Linear));
-        seq2.Append(rocket2.transform.DOMove(target2, rocketTime).SetEase(Ease.Linear));
+        seq1.Append(rocket1.transform.DOLocalMove(target1, rocketTime).SetEase(Ease.Linear));
+        seq2.Append(rocket2.transform.DOLocalMove(target2, rocketTime).SetEase(Ease.Linear));
 
         seq1.OnUpdate(() =>
         {
@@ -236,8 +286,8 @@ public class GridManager : MonoBehaviour
         if (seq2.active)
             yield return seq2.WaitForCompletion();
 
-        Destroy(rocket1);
-        Destroy(rocket2);
+        Destroy(rocket1, 2f);
+        Destroy(rocket2, 2f);
 
         List<int> effectedColumns = new();
         if (dir1 == Vector2.up || dir1 == Vector2.down)
@@ -252,12 +302,12 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        DropBlocks(effectedColumns);
+        DropTiles(effectedColumns);
     }
 
     private void RocketOnUpdate(GameObject rocketInstance)
     {
-        Vector2 pos = rocketInstance.transform.position;
+        Vector2 pos = rocketInstance.transform.localPosition;
         int gridX = Mathf.RoundToInt(pos.x);
         int gridY = Mathf.RoundToInt(pos.y);
         if (gridX >= 0 && gridX < width && gridY >= 0 && gridY < height && grid[gridX, gridY] != null)
@@ -268,12 +318,24 @@ public class GridManager : MonoBehaviour
             }
             else
             {
-                DestroyTile(new Vector2Int(gridX, gridY));
+                DestroyTile(gridX, gridY);
             }
         }
     }
 
-    private void DropBlocks(List<int> effectedColumns)
+    private void DropTiles()
+    {
+        List<int> effectedColumns = new();
+
+        for (int i = 0; i < width; i++)
+        {
+            effectedColumns.Add(i);
+        }
+        DropTiles(effectedColumns);
+
+    }
+
+    private void DropTiles(List<int> effectedColumns)
     {
         foreach (int x in effectedColumns)
         {
@@ -288,11 +350,6 @@ public class GridManager : MonoBehaviour
 
             for (int i = 0; i < emptyCount; i++)
             {
-                //GameObject block = PoolingManager.instance.GetFromPool(Tile.poolingTag, new Vector2(x, height + i + 1), Quaternion.identity);
-                //block.transform.parent = transform;
-                //grid[x, height + i] = block.GetComponent<Tile>();
-                //int randomType = Random.Range(0, 4); //TODO: Bu değerler enumdan alınabilir.
-                //grid[x, height + i].SetType((TileType)randomType);
                 SpawnTile(x, height + i, TileType.rand);
             }
 
@@ -308,7 +365,7 @@ public class GridManager : MonoBehaviour
                                 break;
                             grid[x, y] = grid[x, k];
                             grid[x, k] = null;
-                            grid[x, y].transform.DOMove(new Vector2(x, y), 0.3f);
+                            grid[x, y].transform.DOLocalMove(new Vector2(x, y), 0.3f);
                             break;
                         }
                     }
