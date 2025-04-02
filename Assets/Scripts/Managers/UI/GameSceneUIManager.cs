@@ -20,7 +20,7 @@ public class GameSceneUIManager : MonoBehaviour
     private void ClosePanels()
     {
         gameOverPanel.SetActive(false);
-        gameWinPanel.SetActive(false);
+        //gameWinPanel.SetActive(false);
     }
 
     public void ShowGameOverPanel()
