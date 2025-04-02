@@ -16,3 +16,7 @@ MonoBehaviour:
   sprite:
   - {fileID: 21300000, guid: d0b6b35507a3c6142837679ff8d9e5ef, type: 3}
   health: 1
+  particleMaterials:
+  - {fileID: 2100000, guid: 65073dde476c8a74b9deb9b7de5b2687, type: 2}
+  - {fileID: 2100000, guid: 08584238165aa2f4ba6facb82a304800, type: 2}
+  - {fileID: 2100000, guid: 7c2e80672d2f7204f84be3306da7ae8b, type: 2}

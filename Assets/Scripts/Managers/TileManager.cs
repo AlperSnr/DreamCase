@@ -5,6 +5,9 @@ using UnityEngine;
 public class TileManager : MonoBehaviour
 {
     [SerializeField] private List<TileData> tileDataList;
+    public GameObject tilePrefab;
+    public GameObject tileParticle;
+    public GameObject rocketPrefab;
 
     public static TileManager instance;
 
@@ -33,6 +36,22 @@ public class TileManager : MonoBehaviour
             {
                 tileDataDictionary[tileData.type] = tileData;
             }
+        }
+    }
+
+    public Material GetParticleMaterial(TileType type)
+    {
+        if (tileDataDictionary.TryGetValue(type, out TileData tileData))
+        {
+            if (tileData.particleMaterials.Length == 0) return null;
+
+            int rand = Random.Range(0, tileData.particleMaterials.Length);
+            return tileData.particleMaterials[rand];
+        }
+        else
+        {
+            Debug.LogError("TileManager: Tile particle material not found for type: " + type);
+            return null;
         }
     }
 

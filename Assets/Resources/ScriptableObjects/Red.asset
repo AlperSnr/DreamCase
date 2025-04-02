@@ -17,3 +17,5 @@ MonoBehaviour:
   - {fileID: 21300000, guid: ae18696dd4ff7c043835117bf1e264db, type: 3}
   - {fileID: 21300000, guid: c63dbf3afa59682448a19b948f14a17f, type: 3}
   health: 0
+  particleMaterials:
+  - {fileID: 2100000, guid: 404b2f6fb950e2c49aef77aa97ed4ce8, type: 2}

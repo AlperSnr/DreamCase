@@ -9,14 +9,15 @@ public class GridManager : MonoBehaviour
     public static GridManager instance;
     [SerializeField] private Transform gridParent;
     public Vector2 gridSize = new(9, 9);
+
     private int width;
     private int height;
-    public GameObject tilePrefab;
-    public GameObject rocketPrefab;
     private Tile[,] grid;
     private float rocketTime = 1.2f;
 
     private Vector2 calculatedScale = new(1, 1);
+    private GameObject tilePrefab => TileManager.instance.tilePrefab;
+    private GameObject rocketPrefab => TileManager.instance.rocketPrefab;
 
     private void Awake()
     {
@@ -34,6 +35,8 @@ public class GridManager : MonoBehaviour
         gridParent.localPosition += new Vector3((gridSize.x - width) / 2, 0);
 
         PoolingManager.instance.CreatePool(Tile.poolingTag, tilePrefab, width * height);
+        PoolingManager.instance.CreatePool(Tile.particleTag, TileManager.instance.tileParticle, 15);
+
         CreateGrid(curLevel);
         FindAllLargeGroups();
     }
@@ -161,8 +164,7 @@ public class GridManager : MonoBehaviour
                 }
             }
         }
-
-        DropTiles(effectedColumns);
+        DOVirtual.DelayedCall(0.3f,() => DropTiles(effectedColumns));
     }
 
     private void DestroyTile(int x, int y)
@@ -171,6 +173,8 @@ public class GridManager : MonoBehaviour
 
         if (grid[x, y].isObstacle)
             LevelManager.instance.UpdateGoal(grid[x, y].type, -1);
+
+        grid[x,y].PlayParticle();
 
         PoolingManager.instance.ReturnToPool(Tile.poolingTag, grid[x, y].gameObject);
         grid[x, y] = null;

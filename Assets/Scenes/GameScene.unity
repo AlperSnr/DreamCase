@@ -530,8 +530,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gridParent: {fileID: 914736646}
   gridSize: {x: 9, y: 9}
-  tilePrefab: {fileID: 3546888291623851445, guid: ecf979f813341f1408328a1733c44564, type: 3}
-  rocketPrefab: {fileID: 2802145325732202428, guid: 8bb1fdc9aedb5ae43b91a3bc84c9341e, type: 3}
 --- !u!4 &307846376
 Transform:
   m_ObjectHideFlags: 0
@@ -569,6 +567,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 6fdaa67f6860c604a9ba5f80fe3f2110, type: 2}
   - {fileID: 11400000, guid: 914b1ac0cf4be7d4b9a087d43c649d77, type: 2}
   - {fileID: 11400000, guid: ae36ffaa0d3a5dd418aad346645dbcf6, type: 2}
+  tilePrefab: {fileID: 3546888291623851445, guid: ecf979f813341f1408328a1733c44564, type: 3}
+  tileParticle: {fileID: 731486973998746858, guid: 278ac4488597b544dbe434a46835dbd9, type: 3}
+  rocketPrefab: {fileID: 2802145325732202428, guid: 8bb1fdc9aedb5ae43b91a3bc84c9341e, type: 3}
 --- !u!114 &307846379
 MonoBehaviour:
   m_ObjectHideFlags: 0

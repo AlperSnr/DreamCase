@@ -6,4 +6,5 @@ public class TileData : ScriptableObject
     public TileType type;
     public Sprite[] sprite;
     public int health;
+    public Material[] particleMaterials;
 }

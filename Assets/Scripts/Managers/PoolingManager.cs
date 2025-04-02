@@ -41,7 +41,7 @@ public class PoolingManager : MonoBehaviour
     {
         if (!poolDictionary.ContainsKey(tag))
         {
-            Debug.LogWarning("Pool with tag " + tag + " doesn't exist or is empty.");
+            Debug.LogWarning("Pool with tag " + tag + " doesn't exist");
             return null;
         }
 
