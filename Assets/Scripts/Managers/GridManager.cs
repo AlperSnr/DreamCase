@@ -8,12 +8,15 @@ public class GridManager : MonoBehaviour
 {
     public static GridManager instance;
     [SerializeField] private Transform gridParent;
+    public Vector2 gridSize = new(9, 9);
     private int width;
     private int height;
     public GameObject tilePrefab;
     public GameObject rocketPrefab;
     private Tile[,] grid;
-    private float rocketTime = 0.6f;
+    private float rocketTime = 1.2f;
+
+    private Vector2 calculatedScale = new(1, 1);
 
     private void Awake()
     {
@@ -24,6 +27,12 @@ public class GridManager : MonoBehaviour
         width = curLevel.grid_width;
         height = curLevel.grid_height;
         grid = new Tile[width, height * 2];
+
+        int bigger = Mathf.Max(width, height);
+        calculatedScale = new Vector2(gridSize.x / bigger, gridSize.y / bigger) * tilePrefab.transform.localScale;
+
+        gridParent.localPosition += new Vector3((gridSize.x - width) / 2, 0);
+
         PoolingManager.instance.CreatePool(Tile.poolingTag, tilePrefab, width * height);
         CreateGrid(curLevel);
         FindAllLargeGroups();
@@ -70,7 +79,7 @@ public class GridManager : MonoBehaviour
                     type = TileType.stone;
                     goals[TileType.stone]++;
                     break;
-                case "v1":
+                case "v":
                     type = TileType.vase;
                     goals[TileType.vase]++;
                     break;
@@ -85,10 +94,11 @@ public class GridManager : MonoBehaviour
 
     void SpawnTile(int x, int y, TileType type)
     {
-        GameObject block = PoolingManager.instance.GetFromPool(Tile.poolingTag);
-        block.transform.parent = gridParent;
-        block.transform.localPosition = new Vector2(x, height + 1);
-        grid[x, y] = block.GetComponent<Tile>();
+        GameObject tile = PoolingManager.instance.GetFromPool(Tile.poolingTag);
+        tile.transform.parent = gridParent;
+        tile.transform.localPosition = new Vector2(x, height + 1);
+        tile.transform.localScale = calculatedScale;
+        grid[x, y] = tile.GetComponent<Tile>();
 
         switch (type)
         {
@@ -101,7 +111,7 @@ public class GridManager : MonoBehaviour
                 break;
         }
 
-        block.transform.DOLocalMove(new Vector2(x, y), 0.3f).SetEase(Ease.OutBounce);
+        tile.transform.DOLocalMove(new Vector2(x, y), 0.3f).SetEase(Ease.OutBounce);
     }
 
     public void CheckMatches(int x, int y)
@@ -144,8 +154,6 @@ public class GridManager : MonoBehaviour
         {
             if (grid[pos.x, pos.y].Damage())
             {
-                
-
                 DestroyTile(pos.x, pos.y);
                 if (!effectedColumns.Contains(pos.x))
                 {
@@ -314,8 +322,8 @@ public class GridManager : MonoBehaviour
         rocket1.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetTileSprite(type, 1);
         rocket2.GetComponent<SpriteRenderer>().sprite = TileManager.instance.GetTileSprite(type, 2);
 
-        Vector2 target1 = (Vector2)rocket1.transform.localPosition + dir1 * height;
-        Vector2 target2 = (Vector2)rocket2.transform.localPosition + dir2 * height;
+        Vector2 target1 = (Vector2)rocket1.transform.localPosition + dir1 * height * 2;
+        Vector2 target2 = (Vector2)rocket2.transform.localPosition + dir2 * height * 2;
 
         Sequence seq1 = DOTween.Sequence();
         Sequence seq2 = DOTween.Sequence();
@@ -323,14 +331,17 @@ public class GridManager : MonoBehaviour
         seq1.Append(rocket1.transform.DOLocalMove(target1, rocketTime).SetEase(Ease.Linear));
         seq2.Append(rocket2.transform.DOLocalMove(target2, rocketTime).SetEase(Ease.Linear));
 
+        List<Vector2Int> rocket1Visited = new();
+        List<Vector2Int> rocket2Visited = new();
+
         seq1.OnUpdate(() =>
         {
-            RocketOnUpdate(rocket1);
+            RocketOnUpdate(rocket1, rocket1Visited);
         });
 
         seq2.OnUpdate(() =>
         {
-            RocketOnUpdate(rocket2);
+            RocketOnUpdate(rocket2, rocket2Visited);
         });
 
         yield return seq1.WaitForCompletion();
@@ -356,40 +367,54 @@ public class GridManager : MonoBehaviour
         DropTiles(effectedColumns);
     }
 
-    private void RocketOnUpdate(GameObject rocketInstance)
+    private void RocketOnUpdate(GameObject rocketInstance, List<Vector2Int> visited)
     {
         Vector2 pos = rocketInstance.transform.localPosition;
         int gridX = Mathf.RoundToInt(pos.x);
         int gridY = Mathf.RoundToInt(pos.y);
+
+        if (visited.Contains(new Vector2Int(gridX, gridY)))
+        {
+            return;
+        }
+        visited.Add(new Vector2Int(gridX, gridY));
+
         if (gridX >= 0 && gridX < width && gridY >= 0 && gridY < height && grid[gridX, gridY] != null)
         {
             if (grid[gridX, gridY].type == TileType.rocketV || grid[gridX, gridY].type == TileType.rocketH)
             {
                 Rocket(gridX, gridY, grid[gridX, gridY].type);
             }
-            else
+            else if (grid[gridX, gridY].isObstacle)
             {
-                DestroyTile(gridX, gridY);
+                if (grid[gridX, gridY].Damage())
+                {
+                    DestroyTile(gridX, gridY);
+                }
             }
+            else
+                DestroyTile(gridX, gridY); // TODO buraya obstacle için farklı mantık ekle
         }
     }
-
-
 
     private void DropTiles(List<int> effectedColumns)
     {
         foreach (int x in effectedColumns)
         {
             int emptyCount = 0;
-            for (int y = 0; y < height; y++)
+            for (int y = height - 1; y >= 0; y--)
             {
                 if (grid[x, y] == null)
                 {
                     emptyCount++;
                 }
+                else if (grid[x, y].type == TileType.stone)
+                {
+                    break;
+                }
             }
 
-            if(emptyCount == 0)
+            if (emptyCount == 0)
             {
                 continue;
             }

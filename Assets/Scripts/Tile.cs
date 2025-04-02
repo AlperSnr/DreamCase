@@ -50,6 +50,11 @@ public class Tile : MonoBehaviour, IPointerClickHandler
 
         health--;
 
+        if(type == TileType.vase)
+        {
+            spriteRenderer.sprite = TileManager.instance.GetTileSprite(type, 1);
+        }
+
         if (health <= 0)
         {
             return true;

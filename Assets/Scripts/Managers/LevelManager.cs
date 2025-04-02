@@ -8,17 +8,14 @@ public class LevelManager : MonoBehaviour
     public static LevelManager instance;
 
     [SerializeField] private TMP_Text movesLeftText;
-    [SerializeField] private Image[] goalImages;
+    [SerializeField] private GoalStruct[] goals;
+    [SerializeField] private RectTransform bgPanel;
 
-    private Dictionary<TileType, int> goals = new()
-    {
-        { TileType.box,0 },
-        { TileType.stone, 0 },
-        { TileType.vase, 0 },
-    };
-    private Dictionary<TileType, ImageTextPair> goalTexts = new();
+    private Dictionary<TileType, GoalStruct> goalDict = new();
     private Level curLevel;
     private int movesLeft;
+
+    private GameSceneUIManager uiManager => GameSceneUIManager.instance;
 
     private void Awake()
     {
@@ -32,90 +29,120 @@ public class LevelManager : MonoBehaviour
             return;
         }
 
-        int index = 0;
-        foreach (var pair in goals)
+        foreach (var goal in goals)
         {
-            goalImages[index].sprite = TileManager.instance.GetTileSprite(pair.Key, 0);
-            goalTexts[pair.Key] = new ImageTextPair
-            {
-                image = goalImages[index],
-                text = goalImages[index].GetComponentInChildren<TMP_Text>()
-            };
-            index++;
+            goalDict.Add(goal.type, goal);
         }
+
     }
     private void Start()
     {
-        curLevel = JsonUtility.FromJson<Level>(Resources.Load<TextAsset>("Levels/level_01").text);
+        int level = PlayerPrefs.GetInt("Level", 1);
+        curLevel = JsonUtility.FromJson<Level>(Resources.Load<TextAsset>($"Levels/level_{level}").text);
         GridManager.instance.InitializeGrid(curLevel);
+
     }
 
-    public void SetGoals(Dictionary<TileType,int> goals)
+    private void SetupUI()
     {
-        this.goals = goals;
+        movesLeftText.SetText(curLevel.move_count.ToString());
+        movesLeft = curLevel.move_count;
 
-        UpdateUI();
+        float bgHeight = bgPanel.rect.height;
+        float newHeight = bgHeight * curLevel.grid_height / GridManager.instance.gridSize.y;
+        bgPanel.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, newHeight);
+
+        float bgWidth = bgPanel.rect.width;
+        float newWidth = bgWidth * curLevel.grid_width / GridManager.instance.gridSize.x;
+        bgPanel.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, newWidth);
+
+
+        int validGoal = 0;
+        List<RectTransform> activeGoalTransforms = new();
+        foreach (var pair in goalDict)
+        {
+            if (pair.Value.goalLeft <= 0)
+            {
+                pair.Value.checkImage.transform.parent.gameObject.SetActive(false);
+                continue;
+            }
+            pair.Value.countText.SetText(pair.Value.goalLeft.ToString());
+            validGoal++;
+            activeGoalTransforms.Add(pair.Value.checkImage.transform.parent.GetComponent<RectTransform>());
+        }
+
+        if (validGoal == 1)
+        {
+            activeGoalTransforms[0].anchoredPosition = new Vector2(0, 0);
+        }
+        else if (validGoal == 2)
+        {
+            activeGoalTransforms[0].anchoredPosition = new Vector2(-50, 0);
+            activeGoalTransforms[1].anchoredPosition = new Vector2(50, 0);
+        }
+        else
+        {
+            //
+        }
     }
 
-    public void UpdateGoal(TileType type,int amount)
+
+    public void SetGoals(Dictionary<TileType, int> newGoals)
     {
-        goals[type] += amount;
-        goalTexts[type].text.text = goals[type].ToString();
+        foreach (var goal in newGoals)
+        {
+            var goalStruct = goalDict[goal.Key];
+            goalStruct.goalLeft = goal.Value;
+            goalDict[goal.Key] = goalStruct;
+        }
+        SetupUI();
+    }
+
+    public void UpdateGoal(TileType type, int amount)
+    {
+        var goalStruct = goalDict[type];
+        goalStruct.goalLeft += amount;
+        goalStruct.countText.SetText(goalStruct.goalLeft.ToString());
+        goalDict[type] = goalStruct;
+
+        if (goalStruct.goalLeft <= 0)
+        {
+            goalStruct.checkImage.gameObject.SetActive(true);
+            goalStruct.countText.enabled = false;
+            CheckGoalsCompleted();
+        }
+
+    }
+
+    private void CheckGoalsCompleted()
+    {
+        foreach (var goal in goalDict)
+        {
+            if (goal.Value.goalLeft > 0)
+            {
+                return;
+            }
+        }
+        uiManager.ShowGameWinPanel();
     }
 
     public void DecreaseMoves()
     {
         movesLeft--;
         movesLeftText.text = movesLeft.ToString();
-    }
 
-    private void UpdateUI()
-    {
-        movesLeftText.text = curLevel.move_count.ToString();
-        movesLeft = curLevel.move_count;
-
-        int goalCount = goals.Count;
-
-        foreach (var goal in goals)
+        if (movesLeft <= 0)
         {
-            if(goal.Value <= 0){
-                goalCount--;
-                goalTexts[goal.Key].image.gameObject.SetActive(false);
-                continue;
-            }
-            goalTexts[goal.Key].image.gameObject.SetActive(true);
-            goalTexts[goal.Key].text.text = goal.Value.ToString();
-        }
-
-        if (goalCount == 1)
-        {
-            goalImages[0].rectTransform.sizeDelta = new Vector2(100, 100);
-            goalImages[0].rectTransform.anchoredPosition = new Vector2(0, 0);
-
-        }
-        else if (goalCount == 2)
-        {
-            goalImages[0].rectTransform.sizeDelta = new Vector2(75, 75);
-            goalImages[1].rectTransform.sizeDelta = new Vector2(75, 75);
-
-            goalImages[0].rectTransform.anchoredPosition = new Vector2(-50, 0);
-            goalImages[1].rectTransform.anchoredPosition = new Vector2(50, 0);
-        }
-        else if (goalCount == 3)
-        {
-            goalImages[0].rectTransform.sizeDelta = new Vector2(50, 50);
-            goalImages[1].rectTransform.sizeDelta = new Vector2(50, 50);
-            goalImages[2].rectTransform.sizeDelta = new Vector2(50, 50);
-
-            goalImages[0].rectTransform.anchoredPosition = new Vector2(-50, 25);
-            goalImages[1].rectTransform.anchoredPosition = new Vector2(50, 25);
-            goalImages[2].rectTransform.anchoredPosition = new Vector2(0, -25);
+            uiManager.ShowGameOverPanel();
         }
     }
 
-    private struct ImageTextPair
+    [System.Serializable]
+    private struct GoalStruct
     {
-        public Image image;
-        public TMP_Text text;
+        public TileType type;
+        public TMP_Text countText;
+        public Image checkImage;
+        [HideInInspector] public int goalLeft;
     }
 }
