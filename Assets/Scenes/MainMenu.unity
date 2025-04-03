@@ -422,7 +422,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   buttonText: {fileID: 1857284101}
   overrideLevel: 0
-  levelToOverride: 7
+  levelToOverride: 1
 --- !u!114 &1841666899
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -41,6 +41,7 @@ public class TileManager : MonoBehaviour
 
     public Material GetParticleMaterial(TileType type)
     {
+        print(type);
         if (tileDataDictionary.TryGetValue(type, out TileData tileData))
         {
             if (tileData.particleMaterials.Length == 0) return null;

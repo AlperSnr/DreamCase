@@ -85,6 +85,10 @@ public class Tile : MonoBehaviour, IPointerClickHandler
 
     public void PlayParticle()
     {
+        if(type == TileType.rocketV || type == TileType.rocketH)
+        {
+            return;
+        }
         GameObject particle = PoolingManager.instance.GetFromPool(particleTag);
         particle.GetComponent<ParticleSystemRenderer>().material = tileManager.GetParticleMaterial(type);
         particle.transform.position = transform.position;
